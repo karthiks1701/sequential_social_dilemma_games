@@ -8,7 +8,7 @@ from numpy.core.shape_base import block
 from ray.rllib.agents.callbacks import DefaultCallbacks
 from ray.rllib.env import MultiAgentEnv
 from icecream import ic
-
+from numpy.core.numeric import Inf
 
 
 _MAP_ENV_ACTIONS = {
@@ -234,7 +234,8 @@ class MapEnv(MultiAgentEnv):
         """
 
         self.beam_pos = []
-        self.agents = self.untagged_agents()
+        self.agents = self.ret_untagged_agents()
+        # ic(self.agents)
         agent_actions = {}
         for agent_id, action in actions.items():
             agent_action = self.agents[agent_id].action_map(action)
@@ -348,11 +349,14 @@ class MapEnv(MultiAgentEnv):
     def close(self):
         plt.close()
     
-    def untagged_agents(self):
+    def ret_untagged_agents(self):
         self.untagged_agents = {}
-        for agent in self.agent.values():
+        for agent in self.init_agents.values():
+            if (self.time - agent.tagged_time) > 5:
+                agent.hidden = False
+                agent.tagged_time = 10000
             if not agent.ret_hidden():
-                self.untagged_agents[agent.agent_id] = self.agent[agent.agent_id] 
+                self.untagged_agents[agent.agent_id] = self.init_agents[agent.agent_id] 
         self.num_agents = len(self.untagged_agents)
         return self.untagged_agents 
 
@@ -476,6 +480,7 @@ class MapEnv(MultiAgentEnv):
         if mode == "human":
             plt.cla()
             plt.imshow(rgb_arr, interpolation="nearest")
+            plt.title(f"{self.num_agents}")
             if filename is None:
                 plt.pause(time)
                 plt.show()
@@ -729,7 +734,6 @@ class MapEnv(MultiAgentEnv):
     
     def update_map_fire(
         self,
-        agent_send,
         firing_pos,
         firing_orientation,
         fire_len,
@@ -817,7 +821,7 @@ class MapEnv(MultiAgentEnv):
                         if fire_char==b"Z":
                             agent_counter.append(agent_id) 
                         else:
-                            self.agents[agent_id].hit(fire_char,1)
+                            self.agents[agent_id].hit(fire_char,self.time)
                         break
 
                     # check if the cell blocks beams. For example, waste blocks beams.
@@ -832,10 +836,10 @@ class MapEnv(MultiAgentEnv):
         
 
         if tot_reward>gift and len(agent_counter)>0:
-            ic(agent_send,len(agent_counter),agent_counter,fire_char)
-            ic(tot_reward)
+            # ic(agent_send,len(agent_counter),agent_counter,fire_char)
+            # ic(tot_reward)
             for agents in agent_counter:
-                self.agents[agents].hit(fire_char,gift/len(agent_counter))
+                self.agents[agents].hit(fire_char,self.time,gift/len(agent_counter))
         else:
             gift = 0
         

@@ -1,6 +1,7 @@
 """Base class for an agent that defines the possible actions. """
 
 import numpy as np
+from numpy.core.numeric import Inf
 
 import utility_funcs as util
 
@@ -47,6 +48,7 @@ class Agent(object):
         self.gift_ability = True
         self.receive_gift_ability = False
         self.hidden = False
+        self.tagged_time = 10000
 
     @property
     def action_space(self):
@@ -182,9 +184,10 @@ class HarvestAgent(Agent):
         """Maps action_number to a desired action in the map"""
         return HARVEST_ACTIONS[action_number]
 
-    def hit(self, char, gift_received=0):
-        if char == b"F":
+    def hit(self, char,time,gift_received=0):
+        if char == b"F" and not self.hidden:
             self.hidden = True
+            self.tagged_time = time
             self.reward_this_turn -= 50
         if char == b"Z":
             self.reward_this_turn += gift_received

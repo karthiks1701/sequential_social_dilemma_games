@@ -55,7 +55,13 @@ class HarvestEnv(MapEnv):
             self.agents[agent_id] = agent
     
     
-        
+    def ret_num_agents(self):
+        self.ret_untagged_agents()
+        return self.num_agents    
+    
+    def ret_agents(self):
+        self.ret_untagged_agents()
+        return self.untagged_agents.values()
 
 
     def custom_reset(self):
@@ -68,7 +74,6 @@ class HarvestEnv(MapEnv):
         if action == "FIRE":
             agent.fire_beam(b"F")
             updates,_ = self.update_map_fire(
-                agent.agent_id,
                 agent.pos.tolist(),
                 agent.get_orientation(),
                 self.all_actions["FIRE"],
@@ -79,7 +84,6 @@ class HarvestEnv(MapEnv):
         elif action == "GIFT":
             if agent.gift_ability:
                 updates,gift= self.update_map_fire(
-                    agent.agent_id,
                     agent.pos.tolist(),
                     agent.get_orientation(),
                     self.all_actions["GIFT"],
