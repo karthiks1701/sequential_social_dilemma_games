@@ -9,7 +9,7 @@ from social_dilemmas.maps import HARVEST_MAP
 APPLE_RADIUS = 2
 
 # Add custom actions to the agent
-_HARVEST_ACTIONS = {"FIRE": 5}  # length of firing range
+_HARVEST_ACTIONS = {"FIRE": 5,"GIFT": 5}  # length of firing range
 
 SPAWN_PROB = [0, 0.005, 0.02, 0.05]
 
@@ -40,7 +40,7 @@ class HarvestEnv(MapEnv):
 
     @property
     def action_space(self):
-        return DiscreteWithDType(8, dtype=np.uint8)
+        return DiscreteWithDType(9, dtype=np.uint8)
 
     def setup_agents(self):
         map_with_agents = self.get_map_with_agents()
@@ -51,7 +51,12 @@ class HarvestEnv(MapEnv):
             rotation = self.spawn_rotation()
             grid = map_with_agents
             agent = HarvestAgent(agent_id, spawn_point, rotation, grid, view_len=HARVEST_VIEW_SIZE)
+            self.init_agents[agent_id] = agent
             self.agents[agent_id] = agent
+    
+    
+        
+
 
     def custom_reset(self):
         """Initialize the walls and the apples"""
@@ -59,13 +64,30 @@ class HarvestEnv(MapEnv):
             self.single_update_map(apple_point[0], apple_point[1], b"A")
 
     def custom_action(self, agent, action):
-        agent.fire_beam(b"F")
-        updates = self.update_map_fire(
-            agent.pos.tolist(),
-            agent.get_orientation(),
-            self.all_actions["FIRE"],
-            fire_char=b"F",
-        )
+        updates = []
+        if action == "FIRE":
+            agent.fire_beam(b"F")
+            updates,_ = self.update_map_fire(
+                agent.agent_id,
+                agent.pos.tolist(),
+                agent.get_orientation(),
+                self.all_actions["FIRE"],
+                agent.ret_total_reward(),
+                fire_char = b"F",
+                gift = 0,
+            )
+        elif action == "GIFT":
+            if agent.gift_ability:
+                updates,gift= self.update_map_fire(
+                    agent.agent_id,
+                    agent.pos.tolist(),
+                    agent.get_orientation(),
+                    self.all_actions["GIFT"],
+                    agent.ret_total_reward(),
+                    fire_char = b"Z",
+                    gift = 2,
+                )
+                agent.fire_beam(b"Z", gift)
         return updates
 
     def custom_map_update(self):

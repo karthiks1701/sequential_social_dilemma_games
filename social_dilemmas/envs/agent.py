@@ -43,6 +43,10 @@ class Agent(object):
         self.col_size = col_size
         self.reward_this_turn = 0
         self.prev_visible_agents = None
+        self.total_reward = 100
+        self.gift_ability = True
+        self.receive_gift_ability = False
+        self.hidden = False
 
     @property
     def action_space(self):
@@ -82,9 +86,13 @@ class Agent(object):
         return util.return_view(self.full_map, self.pos, self.row_size, self.col_size)
 
     def compute_reward(self):
+        self.total_reward += self.reward_this_turn
         reward = self.reward_this_turn
         self.reward_this_turn = 0
         return reward
+    
+    def ret_total_reward(self):
+        return self.total_reward
 
     def set_pos(self, new_pos):
         self.pos = np.array(new_pos)
@@ -102,6 +110,9 @@ class Agent(object):
 
     def get_orientation(self):
         return self.orientation
+    
+    def ret_hidden(self):
+        return self.hidden
 
     def return_valid_pos(self, new_pos):
         """Checks that the next pos is legal, if not return current pos"""
@@ -155,7 +166,7 @@ class Agent(object):
 
 
 HARVEST_ACTIONS = BASE_ACTIONS.copy()
-HARVEST_ACTIONS.update({7: "FIRE"})  # Fire a penalty beam
+HARVEST_ACTIONS.update({7: "FIRE",8: "GIFT"})  # Fire a penalty beam
 
 
 class HarvestAgent(Agent):
@@ -171,13 +182,21 @@ class HarvestAgent(Agent):
         """Maps action_number to a desired action in the map"""
         return HARVEST_ACTIONS[action_number]
 
-    def hit(self, char):
+    def hit(self, char, gift_received=0):
         if char == b"F":
+            self.hidden = True
             self.reward_this_turn -= 50
+        if char == b"Z":
+            self.reward_this_turn += gift_received
 
-    def fire_beam(self, char):
+    def fire_beam(self, char, gift_send=0):
         if char == b"F":
             self.reward_this_turn -= 1
+        if char == b"Z":
+            self.reward_this_turn -= gift_send
+
+
+
 
     def get_done(self):
         return False

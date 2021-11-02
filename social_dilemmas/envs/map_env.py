@@ -4,8 +4,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from gym.spaces import Box, Dict
+from numpy.core.shape_base import block
 from ray.rllib.agents.callbacks import DefaultCallbacks
 from ray.rllib.env import MultiAgentEnv
+from icecream import ic
+
+
 
 _MAP_ENV_ACTIONS = {
     "MOVE_LEFT": [0, -1],  # Move left
@@ -28,6 +32,7 @@ DEFAULT_COLOURS = {
     b"A": np.array([0, 255, 0], dtype=np.uint8),  # Green apples
     b"F": np.array([255, 255, 0], dtype=np.uint8),  # Yellow firing beam
     b"P": np.array([159, 67, 255], dtype=np.uint8),  # Generic agent (any player)
+    b"Z": np.array([165,42,42],dtype=np.uint8), # gifting fire beam
     # Colours for agents. R value is a unique identifier
     b"1": np.array([0, 0, 255], dtype=np.uint8),  # Pure blue
     b"2": np.array([2, 81, 154], dtype=np.uint8),  # Sky blue
@@ -91,6 +96,7 @@ class MapEnv(MultiAgentEnv):
         self.use_collective_reward = use_collective_reward
         self.all_actions = _MAP_ENV_ACTIONS.copy()
         self.all_actions.update(extra_actions)
+        self.time = 0
         # Map without agents or beams
         self.world_map = np.full(
             (len(self.base_map), len(self.base_map[0])), fill_value=b" ", dtype="c"
@@ -106,6 +112,8 @@ class MapEnv(MultiAgentEnv):
         self.beam_pos = []
 
         self.agents = {}
+        self.init_agents = {}
+        self.untagged_agents = {}
 
         # returns the agent at a desired position if there is one
         self.pos_dict = {}
@@ -226,6 +234,7 @@ class MapEnv(MultiAgentEnv):
         """
 
         self.beam_pos = []
+        self.agents = self.untagged_agents()
         agent_actions = {}
         for agent_id, action in actions.items():
             agent_action = self.agents[agent_id].action_map(action)
@@ -254,7 +263,7 @@ class MapEnv(MultiAgentEnv):
         for agent in self.agents.values():
             row, col = agent.pos[0], agent.pos[1]
             # Firing beams have priority over agents and should cover them
-            if self.world_map[row, col] not in [b"F", b"C"]:
+            if self.world_map[row, col] not in [b"F", b"C",b"Z"]:
                 self.single_update_world_color_map(row, col, agent.get_char_id())
 
         observations = {}
@@ -289,6 +298,7 @@ class MapEnv(MultiAgentEnv):
                 rewards[agent] = collective_reward
 
         dones["__all__"] = np.any(list(dones.values()))
+        self.time += 1
         return observations, rewards, dones, infos
 
     def reset(self):
@@ -305,10 +315,11 @@ class MapEnv(MultiAgentEnv):
         """
         self.beam_pos = []
         self.agents = {}
+        self.untagged_agents = {}
         self.setup_agents()
         self.reset_map()
         self.custom_map_update()
-
+        self.time = 0 
         map_with_agents = self.get_map_with_agents()
 
         observations = {}
@@ -336,6 +347,14 @@ class MapEnv(MultiAgentEnv):
 
     def close(self):
         plt.close()
+    
+    def untagged_agents(self):
+        self.untagged_agents = {}
+        for agent in self.agent.values():
+            if not agent.ret_hidden():
+                self.untagged_agents[agent.agent_id] = self.agent[agent.agent_id] 
+        self.num_agents = len(self.untagged_agents)
+        return self.untagged_agents 
 
     @property
     def agent_pos(self):
@@ -445,19 +464,21 @@ class MapEnv(MultiAgentEnv):
 
         return rgb_arr
 
-    def render(self, filename=None, mode="human"):
+    def render(self, filename=None, mode="human",time=0.1):
         """Creates an image of the map to plot or save.
 
         Args:
             filename: If a string is passed, will save the image
                       to disk at this location.
         """
+        plt.ion()
         rgb_arr = self.full_map_to_colors()
         if mode == "human":
             plt.cla()
             plt.imshow(rgb_arr, interpolation="nearest")
             if filename is None:
-                plt.show(block=False)
+                plt.pause(time)
+                plt.show()
             else:
                 plt.savefig(filename)
             return None
@@ -703,18 +724,24 @@ class MapEnv(MultiAgentEnv):
         self.build_walls()
         self.custom_reset()
 
+    
+    
+    
     def update_map_fire(
         self,
+        agent_send,
         firing_pos,
         firing_orientation,
         fire_len,
+        tot_reward,
         fire_char,
         cell_types=[],
         update_char=[],
         blocking_cells=b"P",
         beam_width=3,
+        gift=2
     ):
-        """From a firing position, fire a beam that may clean or hit agents
+        """From a firing position, fire a beam that may clean, hit or tag agents for gifting
 
         Notes:
             (1) Beams are blocked by agents
@@ -752,6 +779,7 @@ class MapEnv(MultiAgentEnv):
         agent_by_pos = {tuple(agent.pos): agent_id for agent_id, agent in self.agents.items()}
         start_pos = np.asarray(firing_pos)
         firing_direction = ORIENTATIONS[firing_orientation]
+
         # compute the other two starting positions
         right_shift = self.rotate_right(firing_direction)
         if beam_width == 1:
@@ -762,10 +790,12 @@ class MapEnv(MultiAgentEnv):
                 start_pos + right_shift - firing_direction,
                 start_pos - right_shift - firing_direction,
             ]
+        
         else:
             raise NotImplementedError()
         firing_points = []
         updates = []
+        agent_counter = []
         for pos in firing_pos:
             next_cell = pos + firing_direction
             for i in range(fire_len):
@@ -784,7 +814,10 @@ class MapEnv(MultiAgentEnv):
                     # activate the agents hit function if needed
                     if [next_cell[0], next_cell[1]] in self.agent_pos:
                         agent_id = agent_by_pos[(next_cell[0], next_cell[1])]
-                        self.agents[agent_id].hit(fire_char)
+                        if fire_char==b"Z":
+                            agent_counter.append(agent_id) 
+                        else:
+                            self.agents[agent_id].hit(fire_char,1)
                         break
 
                     # check if the cell blocks beams. For example, waste blocks beams.
@@ -796,9 +829,18 @@ class MapEnv(MultiAgentEnv):
 
                 else:
                     break
+        
 
+        if tot_reward>gift and len(agent_counter)>0:
+            ic(agent_send,len(agent_counter),agent_counter,fire_char)
+            ic(tot_reward)
+            for agents in agent_counter:
+                self.agents[agents].hit(fire_char,gift/len(agent_counter))
+        else:
+            gift = 0
+        
         self.beam_pos += firing_points
-        return updates
+        return updates,gift
 
     def spawn_point(self):
         """Returns a randomly selected spawn point."""
