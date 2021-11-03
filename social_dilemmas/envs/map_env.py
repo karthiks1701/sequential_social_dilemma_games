@@ -112,8 +112,8 @@ class MapEnv(MultiAgentEnv):
         self.beam_pos = []
 
         self.agents = {}
-        self.init_agents = {}
-        self.untagged_agents = {}
+        # self.init_agents = {}
+        # self.untagged_agents = {}
 
         # returns the agent at a desired position if there is one
         self.pos_dict = {}
@@ -234,7 +234,7 @@ class MapEnv(MultiAgentEnv):
         """
 
         self.beam_pos = []
-        self.agents = self.ret_untagged_agents()
+        #self.agents = self.ret_untagged_agents()
         # ic(self.agents)
         agent_actions = {}
         for agent_id, action in actions.items():

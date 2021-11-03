@@ -185,9 +185,9 @@ class HarvestAgent(Agent):
         return HARVEST_ACTIONS[action_number]
 
     def hit(self, char,time,gift_received=0):
-        if char == b"F" and not self.hidden:
-            self.hidden = True
-            self.tagged_time = time
+        if char == b"F":
+            #self.hidden = True
+            #self.tagged_time = time
             self.reward_this_turn -= 50
         if char == b"Z":
             self.reward_this_turn += gift_received

@@ -25,6 +25,6 @@ for timestep in range(100):
     
     # ic(agent_action_dict)
     obs,rew,dones,info = env.step(agent_action_dict)
-    # ic(rew)
+    ic(rew)
     env.render(time=0.1)
 
